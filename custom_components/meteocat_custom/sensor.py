@@ -131,6 +131,7 @@ class MeteocatForecastSensor(CoordinatorEntity, SensorEntity):
 
         if device_class_str and device_class_str in DEVICE_CLASS_MAP:
             self._attr_device_class = DEVICE_CLASS_MAP[device_class_str]
+            self._attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def device_info(self):
