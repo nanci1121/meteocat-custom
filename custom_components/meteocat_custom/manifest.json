@@ -1,0 +1,13 @@
+{
+  "domain": "meteocat_custom",
+  "name": "Meteocat Custom",
+  "config_flow": true,
+  "documentation": "https://apidocs.meteocat.gencat.cat/documentacio/",
+  "dependencies": [],
+  "codeowners": [],
+  "iot_standard": "cloud_polling",
+  "version": "1.0.0",
+  "requirements": [
+    "aiohttp>=3.8.0"
+  ]
+}

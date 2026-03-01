@@ -1,0 +1,32 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Configure Meteocat",
+                "description": "Enter your Meteocat API Key and station data. You can get your key at {docs_url}",
+                "data": {
+                    "api_key": "Meteocat API Key",
+                    "station_id": "Station ID (e.g. WP)",
+                    "town_id": "Town ID 6 digits (e.g. 082798)",
+                    "station_name": "Station name (e.g. Terrassa)"
+                }
+            }
+        },
+        "error": {
+            "auth": "Invalid API Key or no permissions"
+        },
+        "abort": {
+            "already_configured": "This station is already configured"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Meteocat Options",
+                "data": {
+                    "api_key": "Meteocat API Key"
+                }
+            }
+        }
+    }
+}
