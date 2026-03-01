@@ -6,6 +6,7 @@
   "dependencies": [],
   "codeowners": [],
   "iot_standard": "cloud_polling",
+  "icon": "mdi:weather-partly-cloudy",
   "version": "1.0.0",
   "requirements": [
     "aiohttp>=3.8.0"
