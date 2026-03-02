@@ -126,42 +126,65 @@ class MeteocatCoordinator(DataUpdateCoordinator):
         return True
 
     async def _fetch_observations(self, session: aiohttp.ClientSession, data: dict) -> None:
-        """Fetch latest XEMA observations for all configured variables."""
-        if not self._has_quota("XEMA", MIN_QUOTA_XEMA):
+        """Fetch all XEMA observations in a single bulk request (saves massive quota)."""
+        if not self._has_quota("XEMA", 1): # Only need 1 token now
             _LOGGER.warning("Cuota XEMA insuficiente, omitiendo observaciones")
             return
 
-        for var_code in XEMA_VARIABLES:
-            try:
-                url = f"{API_XEMA_URL}/variables/mesurades/{var_code}/ultimes?codiEstacio={self.station_id}"
-                async with session.get(url, headers=self.headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        var_data = await resp.json()
-                        lectures = var_data.get("lectures", [])
-                        if lectures:
-                            # Get the most recent reading
-                            latest = lectures[-1]
-                            data["observations"][var_code] = {
-                                "value": latest.get("valor"),
-                                "timestamp": latest.get("data"),
-                            }
-                            _LOGGER.debug(
-                                "Variable %d (%s): %s",
-                                var_code,
-                                XEMA_VARIABLES[var_code][0],
-                                latest.get("valor"),
-                            )
-                    elif resp.status == 403:
-                        _LOGGER.debug("Variable %d no disponible para esta estación (403)", var_code)
-                    elif resp.status == 429:
-                        _LOGGER.warning("Rate limit alcanzado en variable %d, deteniendo", var_code)
-                        break
-                    else:
-                        _LOGGER.debug("Variable %d: HTTP %s", var_code, resp.status)
-            except asyncio.TimeoutError:
-                _LOGGER.warning("Timeout obteniendo variable %d", var_code)
-            except Exception as err:
-                _LOGGER.debug("Error obteniendo variable %d: %s", var_code, err)
+        now = datetime.now()
+        today_str = now.strftime("%Y/%m/%d")
+        
+        try:
+            # This endpoint returns ALL variables for the day in one single call (1 token!)
+            url = f"{API_XEMA_URL}/estacions/mesurades/{self.station_id}/{today_str}"
+            async with session.get(url, headers=self.headers, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                if resp.status == 200:
+                    all_lectures = await resp.json()
+                    if not all_lectures:
+                        _LOGGER.debug("No hay lecturas para hoy en la estación %s", self.station_id)
+                        return
+
+                    # The response is a list of all readings for all variables. 
+                    # We need to find the LATEST reading for each variable we care about.
+                    latest_by_var: dict[int, dict] = {}
+                    
+                    for item in all_lectures:
+                        v_code = item.get("codi")
+                        v_date = item.get("data") # Format: 2024-03-02T17:00:00Z
+                        v_value = item.get("valor")
+                        
+                        if v_code is None or v_value is None:
+                            continue
+                            
+                        # If it's a variable we track in XEMA_VARIABLES
+                        if v_code in XEMA_VARIABLES:
+                            # Update if it's newer than what we have
+                            if v_code not in latest_by_var or v_date > latest_by_var[v_code]["timestamp"]:
+                                latest_by_var[v_code] = {
+                                    "value": v_value,
+                                    "timestamp": v_date
+                                }
+                    
+                    # Store found latest values in the coordinator data
+                    data["observations"] = latest_by_var
+                    _LOGGER.info(
+                        "Actualizadas %d variables XEMA para la estación %s (Consulta Única)", 
+                        len(latest_by_var), 
+                        self.station_id
+                    )
+                    
+                elif resp.status == 429:
+                    _LOGGER.warning("Rate limit alcanzado (429) en consulta masiva XEMA.")
+                    # Force quota to 0 to prevent further attempts this cycle
+                    if "XEMA_750 OD" in self._quotas:
+                        self._quotas["XEMA_750 OD"]["remaining"] = 0
+                else:
+                    _LOGGER.warning("Error en consulta masiva XEMA: HTTP %s", resp.status)
+                    
+        except asyncio.TimeoutError:
+            _LOGGER.warning("Timeout en consulta masiva XEMA")
+        except Exception as err:
+            _LOGGER.error("Error inesperado en consulta masiva XEMA: %s", err)
 
     async def _fetch_forecast(self, session: aiohttp.ClientSession, data: dict) -> None:
         """Fetch municipal hourly forecast with smart caching."""

@@ -16,9 +16,9 @@ CONF_TOWN_ID = "town_id"
 CONF_STATION_NAME = "station_name"
 
 # Update intervals (minutes)
-UPDATE_INTERVAL_XEMA = 15       # Observations every 15 min
-UPDATE_INTERVAL_FORECAST = 360  # Forecast every 6 hours (only updates at 5AM/5PM)
-UPDATE_INTERVAL_DAILY = 720     # Daily forecast every 12 hours
+UPDATE_INTERVAL_XEMA = 90       # Observations every 90 min (to save quota)
+UPDATE_INTERVAL_FORECAST = 720  # Forecast every 12 hours
+UPDATE_INTERVAL_DAILY = 1440    # Daily forecast every 24 hours
 QUOTA_CHECK_INTERVAL = 60       # Check quota every hour
 
 # Quota minimums (reserve tokens)
