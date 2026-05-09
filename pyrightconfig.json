@@ -1,0 +1,17 @@
+{
+  "python.defaultInterpreterPath": "../.venv/bin/python3",
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "basic",
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "none",
+  "venvPath": "..",
+  "venv": ".venv",
+  "exclude": [
+    "**/__pycache__"
+  ],
+  "ignore": [
+    "homeassistant",
+    "homeassistant.*"
+  ]
+}
