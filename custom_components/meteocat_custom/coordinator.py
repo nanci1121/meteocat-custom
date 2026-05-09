@@ -133,54 +133,67 @@ class MeteocatCoordinator(DataUpdateCoordinator):
 
         now = datetime.now()
         today_str = now.strftime("%Y/%m/%d")
-        
+
         try:
-            # This endpoint returns ALL variables for the day in one single call (1 token!)
+            # This endpoint returns ALL variables for the day in one single call (1 token!).
+            # Response structure: [{codi: "WP", variables: [{codi: 32, lectures: [{data, valor}]}]}]
             url = f"{API_XEMA_URL}/estacions/mesurades/{self.station_id}/{today_str}"
             async with session.get(url, headers=self.headers, timeout=aiohttp.ClientTimeout(total=20)) as resp:
                 if resp.status == 200:
-                    all_lectures = await resp.json()
-                    if not all_lectures:
+                    all_stations = await resp.json()
+                    if not all_stations:
                         _LOGGER.debug("No hay lecturas para hoy en la estación %s", self.station_id)
                         return
 
-                    # The response is a list of all readings for all variables. 
-                    # We need to find the LATEST reading for each variable we care about.
+                    # The response is a list of stations (usually just 1).
+                    # Each station has a list of variables, each with a list of readings.
                     latest_by_var: dict[int, dict] = {}
-                    
-                    for item in all_lectures:
-                        v_code = item.get("codi")
-                        v_date = item.get("data") # Format: 2024-03-02T17:00:00Z
-                        v_value = item.get("valor")
-                        
-                        if v_code is None or v_value is None:
-                            continue
-                            
-                        # If it's a variable we track in XEMA_VARIABLES
-                        if v_code in XEMA_VARIABLES:
-                            # Update if it's newer than what we have
-                            if v_code not in latest_by_var or v_date > latest_by_var[v_code]["timestamp"]:
+
+                    for station_item in all_stations:
+                        variables = station_item.get("variables", [])
+                        for var in variables:
+                            v_code = var.get("codi")
+
+                            # Only process variables we care about
+                            if v_code not in XEMA_VARIABLES:
+                                continue
+
+                            lectures = var.get("lectures", [])
+                            if not lectures:
+                                continue
+
+                            # Get the most recent reading (last in the chronological list)
+                            latest = lectures[-1]
+                            v_value = latest.get("valor")
+                            v_date = latest.get("data")
+
+                            if v_value is not None:
                                 latest_by_var[v_code] = {
                                     "value": v_value,
-                                    "timestamp": v_date
+                                    "timestamp": v_date,
                                 }
-                    
-                    # Store found latest values in the coordinator data
+                                _LOGGER.debug(
+                                    "Variable %d (%s): %s",
+                                    v_code,
+                                    XEMA_VARIABLES.get(v_code, ("?",))[0],
+                                    v_value,
+                                )
+
                     data["observations"] = latest_by_var
                     _LOGGER.info(
-                        "Actualizadas %d variables XEMA para la estación %s (Consulta Única)", 
-                        len(latest_by_var), 
-                        self.station_id
+                        "Actualizadas %d variables XEMA para la estación %s (Consulta Única)",
+                        len(latest_by_var),
+                        self.station_id,
                     )
-                    
+
                 elif resp.status == 429:
                     _LOGGER.warning("Rate limit alcanzado (429) en consulta masiva XEMA.")
-                    # Force quota to 0 to prevent further attempts this cycle
-                    if "XEMA_750 OD" in self._quotas:
-                        self._quotas["XEMA_750 OD"]["remaining"] = 0
+                    for key in self._quotas:
+                        if "xema" in key.lower():
+                            self._quotas[key]["remaining"] = 0
                 else:
                     _LOGGER.warning("Error en consulta masiva XEMA: HTTP %s", resp.status)
-                    
+
         except asyncio.TimeoutError:
             _LOGGER.warning("Timeout en consulta masiva XEMA")
         except Exception as err:
